@@ -6,6 +6,8 @@ import { PortalHost } from '@rn-primitives/portal';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { SelectedBandProvider } from '@/contexts/SelectedBandContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -16,10 +18,14 @@ export default function RootLayout() {
   const { colorScheme } = useColorScheme();
 
   return (
-    <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      <Stack />
-      <PortalHost />
-    </ThemeProvider>
+    <AuthProvider>
+      <SelectedBandProvider>
+        <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <Stack screenOptions={{ headerShown: false }} />
+          <PortalHost />
+        </ThemeProvider>
+      </SelectedBandProvider>
+    </AuthProvider>
   );
 }

@@ -29,6 +29,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -39,3 +40,6 @@ yarn-error.*
 
 expo-env.d.ts
 # @end expo-cli
+
+*.sql
+.old
