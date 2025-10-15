@@ -36,6 +36,19 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "08423eaa-eb04-48d7-abd3-a52fd3e214ec"
+      }
+    },
+    "owner": "waffles",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/08423eaa-eb04-48d7-abd3-a52fd3e214ec"
     }
   }
 }
