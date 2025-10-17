@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInvite } from '@/contexts/InviteContext';
+import { navigate } from 'expo-router/build/global-state/routing';
 
 export default function SignInScreen() {
   const { inviteToken } = useLocalSearchParams<{ inviteToken?: string }>();
@@ -47,9 +48,11 @@ export default function SignInScreen() {
       if (error.message.includes('Invalid login credentials')) {
         errorMessage = 'Invalid email or password. Please check your credentials and try again.';
       } else if (error.message.includes('Email not confirmed')) {
-        errorMessage = 'Please verify your email address before signing in. Check your inbox for a verification link.';
+        errorMessage =
+          'Please verify your email address before signing in. Check your inbox for a verification link.';
       } else if (error.message.includes('User not found')) {
-        errorMessage = 'No account found with this email address. Would you like to sign up instead?';
+        errorMessage =
+          'No account found with this email address. Would you like to sign up instead?';
       }
 
       Alert.alert('Sign In Failed', errorMessage);
@@ -113,8 +116,8 @@ export default function SignInScreen() {
           </View>
 
           {inviteToken && (
-            <View className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg">
-              <Text className="text-blue-700 dark:text-blue-300 text-sm">
+            <View className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+              <Text className="text-sm text-blue-700 dark:text-blue-300">
                 You'll be added to the band after signing in.
               </Text>
             </View>
@@ -153,11 +156,15 @@ export default function SignInScreen() {
 
           <View className="flex-row items-center justify-center gap-1">
             <Text className="text-muted-foreground">Don't have an account?</Text>
-            <Link href="/(auth)/sign-up" asChild>
-              <Button variant="link" size="sm" disabled={loading}>
-                <Text>Sign Up</Text>
-              </Button>
-            </Link>
+            {/* <Link href="/(auth)/sign-up" asChild> */}
+            <Button
+              variant="link"
+              size="sm"
+              disabled={loading}
+              onPress={() => navigate('/(auth)/sign-up')}>
+              <Text>Sign Up</Text>
+            </Button>
+            {/* </Link> */}
           </View>
         </View>
       </ScrollView>
