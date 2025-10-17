@@ -90,14 +90,13 @@ export default function InviteAcceptScreen() {
     setIsAccepting(true);
 
     try {
-      console.log('Accepting invite...', { token, userId: user.id });
-      const result = await acceptInvite(token, user.id);
-      console.log('Invite accepted:', result);
+      // Existing users clicking link should get pending status
+      const result = await acceptInvite(token, user.id, false);
 
       // Refresh bands list
       await refreshBands();
 
-      // Show success message
+      // Show appropriate message based on result
       if (result.alreadyMember) {
         // Already a member - just navigate to the band
         showAlert(
@@ -107,8 +106,17 @@ export default function InviteAcceptScreen() {
             router.replace(`/bands/${result.bandId}`);
           }
         );
+      } else if (result.isPending) {
+        // Pending invitation - needs to accept from invitations page
+        showAlert(
+          'Invitation Received',
+          'Your invitation has been received! Check your Invitations page to accept and join the band.',
+          () => {
+            router.replace('/(app)/invitations');
+          }
+        );
       } else {
-        // Successfully joined - celebrate!
+        // Successfully joined immediately
         showAlert(
           'Welcome!',
           'You have successfully joined the band!',

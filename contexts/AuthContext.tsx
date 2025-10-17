@@ -11,6 +11,7 @@ interface AuthContextType {
     error: AuthError | null;
   }>;
   signIn: (email: string, password: string) => Promise<{
+    data: AuthResponse['data'] | null;
     error: AuthError | null;
   }>;
   signOut: () => Promise<void>;
@@ -59,12 +60,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    return { error };
+    return { data, error };
   };
 
   const signOut = async () => {

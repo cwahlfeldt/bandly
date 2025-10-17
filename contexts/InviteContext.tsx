@@ -6,6 +6,7 @@ import {
   revokeInvitation,
   getBandInvitations,
   generateInviteUrl,
+  checkUserExists,
   type CreateInviteParams,
   type ValidateInviteResult,
 } from '@/lib/invites';
@@ -28,10 +29,14 @@ interface InviteContextType {
   validateInvite: (token: string) => Promise<ValidateInviteResult>;
 
   // Accept an invitation (add user to band)
-  acceptInvite: (token: string, userId: string) => Promise<{
+  acceptInvite: (token: string, userId: string, isNewSignup?: boolean) => Promise<{
     bandId: string;
     alreadyMember: boolean;
+    isPending: boolean;
   }>;
+
+  // Check if user exists by email
+  checkUserByEmail: (email: string) => Promise<string | null>;
 
   // Revoke an invitation
   revokeInvite: (invitationId: string) => Promise<void>;
@@ -90,19 +95,37 @@ export function InviteProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const acceptInvite = useCallback(async (token: string, userId: string) => {
+  const acceptInvite = useCallback(
+    async (token: string, userId: string, isNewSignup: boolean = false) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await acceptInvitation(token, userId, isNewSignup);
+        // Clear pending token after successful acceptance
+        setPendingInviteToken(null);
+        return result;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to accept invitation';
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const checkUserByEmail = useCallback(async (email: string) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const result = await acceptInvitation(token, userId);
-      // Clear pending token after successful acceptance
-      setPendingInviteToken(null);
-      return result;
+      return await checkUserExists(email);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to accept invitation';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to check user';
       setError(errorMessage);
-      throw err;
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -146,6 +169,7 @@ export function InviteProvider({ children }: { children: React.ReactNode }) {
         createInvite,
         validateInvite,
         acceptInvite,
+        checkUserByEmail,
         revokeInvite,
         fetchBandInvites,
         isLoading,

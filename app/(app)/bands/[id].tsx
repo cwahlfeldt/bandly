@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, Image, ActivityIndicator, Pressable } from 'react-native';
+import { View, ScrollView, Image, ActivityIndicator, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UsersIcon, CalendarIcon, MusicIcon, ListIcon, MessageSquareIcon, UserPlus } from 'lucide-react-native';
+import { UsersIcon, CalendarIcon, MusicIcon, ListIcon, MessageSquareIcon, UserPlus, UserMinus } from 'lucide-react-native';
 import { EmptyState } from '@/components/EmptyState';
 import { InviteModal } from '@/components/InviteModal';
 import { supabase } from '@/lib/supabase';
@@ -83,6 +83,37 @@ export default function BandDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRemoveMember = (member: BandMember) => {
+    Alert.alert(
+      'Remove Member',
+      `Are you sure you want to remove ${member.profiles?.name || 'this member'} from the band?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('band_members')
+                .delete()
+                .eq('id', member.id);
+
+              if (error) throw error;
+
+              Alert.alert('Success', 'Member removed from band');
+              // Refresh the members list
+              fetchBandDetails();
+            } catch (error: any) {
+              console.error('Error removing member:', error);
+              Alert.alert('Error', error.message || 'Failed to remove member');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -165,10 +196,22 @@ export default function BandDetailScreen() {
 
           <TabsContent value="members" className="p-4">
             <View className="gap-3">
-              <Button onPress={() => setInviteModalVisible(true)}>
-                <Icon as={UserPlus} size={20} />
-                <Text>Invite Member</Text>
-              </Button>
+              <View className="flex-row gap-2">
+                <Button
+                  onPress={() => setInviteModalVisible(true)}
+                  className="flex-1">
+                  <Icon as={UserPlus} size={20} />
+                  <Text>Invite Member</Text>
+                </Button>
+                {userRole === 'owner' && (
+                  <Button
+                    onPress={() => router.push(`/bands/${id}/invites`)}
+                    variant="outline"
+                    className="flex-1">
+                    <Text>Manage Invites</Text>
+                  </Button>
+                )}
+              </View>
               {members.map((member) => (
                 <View
                   key={member.id}
@@ -186,6 +229,14 @@ export default function BandDetailScreen() {
                       {member.role}
                     </Text>
                   </View>
+                  {/* Show remove button only for owners, and not for themselves */}
+                  {userRole === 'owner' && member.user_id !== user?.id && (
+                    <Pressable
+                      onPress={() => handleRemoveMember(member)}
+                      className="p-2 rounded-lg active:bg-muted">
+                      <UserMinus size={20} className="text-destructive" />
+                    </Pressable>
+                  )}
                 </View>
               ))}
             </View>

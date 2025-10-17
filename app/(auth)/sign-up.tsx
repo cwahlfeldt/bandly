@@ -30,6 +30,13 @@ export default function SignUpScreen() {
       return;
     }
 
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
+
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
       return;
@@ -45,7 +52,21 @@ export default function SignUpScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert('Sign Up Failed', error.message);
+
+      // Provide user-friendly error messages
+      let errorMessage = error.message;
+
+      if (error.message.includes('User already registered')) {
+        errorMessage = 'An account with this email already exists. Please sign in instead.';
+      } else if (error.message.includes('Password should be at least')) {
+        errorMessage = 'Password must be at least 6 characters long.';
+      } else if (error.message.includes('Invalid email')) {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (error.message.includes('Email rate limit exceeded')) {
+        errorMessage = 'Too many signup attempts. Please try again in a few minutes.';
+      }
+
+      Alert.alert('Sign Up Failed', errorMessage);
       return;
     }
 
@@ -73,41 +94,38 @@ export default function SignUpScreen() {
       // If there's a pending invite token, accept it
       if (inviteToken) {
         try {
-          const result = await acceptInvite(inviteToken, data.user.id);
-          setLoading(false);
+          // Pass isNewSignup=true so they get active status immediately
+          const result = await acceptInvite(inviteToken, data.user.id, true);
 
-          Alert.alert(
-            'Welcome to Bandly!',
-            result.alreadyMember
-              ? 'Your account has been created!'
-              : 'Your account has been created and you have successfully joined the band!',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  router.replace(`/bands/${result.bandId}`);
-                },
-              },
-            ]
-          );
+          // Navigate to band page after successful signup and invite acceptance
+          setTimeout(() => {
+            setLoading(false);
+            router.replace(`/bands/${result.bandId}`);
+          }, 500);
         } catch (inviteError) {
           setLoading(false);
+
+          // Even if invite fails, user is logged in, so navigate to app
           Alert.alert(
             'Account Created',
-            'Your account has been created, but there was an issue accepting the invitation. You can try joining the band again.',
+            'Your account has been created, but there was an issue accepting the invitation. You can try joining the band from the invite link again.',
             [
               {
                 text: 'OK',
                 onPress: () => {
-                  router.replace('/(app)');
+                  router.replace('/');
                 },
               },
             ]
           );
         }
       } else {
+        // No invite token - just navigate to app
         setLoading(false);
-        router.replace('/(app)');
+        // Give AuthContext a moment to process the session
+        setTimeout(() => {
+          router.replace('/');
+        }, 300);
       }
     } else {
       setLoading(false);

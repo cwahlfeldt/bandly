@@ -1,6 +1,8 @@
 # Band Invite System
 
-A comprehensive invitation system for inviting new and existing users to join bands in the Bandly app.
+## UPDATED - Unified Invitation System
+
+A comprehensive invitation system for inviting new and existing users to join bands. This system uses a **single source of truth** (`band_invitations` table) for all invitation types.
 
 ## Features
 
@@ -37,39 +39,51 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_ID > types/database.
 
 ### For Band Members (Creating Invites)
 
-1. Navigate to a band detail page
-2. Click the "Invite Member" button (in header or Members tab)
-3. Configure invite options:
-   - Email (optional - for targeted invites)
-   - Maximum uses (1, 5, 10, or unlimited)
-   - Expiration time (1, 7, 30 days, or never)
-4. Create the invite link
-5. Copy or share the link via native share dialog
+1. Navigate to a band detail page → Click "Invite Member"
+2. Choose invite type:
+
+   **Option A: Email-Based Invite**
+   - Enter recipient's email address
+   - System checks if user exists
+   - Creates invitation with email attached
+   - If user exists: Shows up in their Invitations page automatically
+   - If new user: Share generated link for signup
+   - Single-use, expires in 7 days
+
+   **Option B: Shareable Link**
+   - Generate a general invitation link
+   - Can be shared with multiple people (up to 10 uses)
+   - Expires in 30 days
+   - Copy link or share via native share dialog
 
 ### For Invitees (Accepting Invites)
 
-#### New Users:
+#### New Users (Signing Up):
 1. Click invite link → Opens app at `/invite/{token}`
 2. See band preview with details
 3. Click "Create Account & Join"
 4. Fill out signup form
-5. After signup → Automatically joined to band
+5. After signup → **Automatically added to band with `status: 'active'`**
 6. Redirected to band detail page
 
-#### Existing Users:
+#### Existing Users (Not Logged In):
 1. Click invite link → Opens app at `/invite/{token}`
 2. See band preview with details
 3. Click "Sign In to Join"
 4. Sign in with credentials
-5. After signin → Automatically joined to band
-6. Redirected to band detail page
+5. Creates `band_members` entry with **`status: 'pending'`**
+6. Redirected to Invitations page to formally accept
+7. User must click "Accept" from Invitations page
+8. Status changes to `'active'` and user can access the band
 
-#### Already Logged In:
+#### Existing Users (Already Logged In):
 1. Click invite link → Opens app at `/invite/{token}`
 2. See band preview with details
 3. Click "Accept Invitation"
-4. Immediately joined to band
-5. Redirected to band detail page
+4. Creates `band_members` entry with **`status: 'pending'`**
+5. Shows message: "Check your Invitations page to accept"
+6. Redirected to Invitations page
+7. User clicks "Accept" to join the band
 
 ## File Structure
 
@@ -120,11 +134,14 @@ const result = await validateInviteToken(token);
 // { valid: true, invitation: {...} } or { valid: false, error: '...' }
 ```
 
-#### `acceptInvitation(token, userId)`
+#### `acceptInvitation(token, userId, isNewSignup?)`
 Accepts an invitation and adds user to band.
 ```typescript
-const result = await acceptInvitation(token, userId);
-// { bandId: 'uuid', alreadyMember: false }
+const result = await acceptInvitation(token, userId, isNewSignup);
+// Returns: { bandId: 'uuid', alreadyMember: false, isPending: boolean }
+
+// isNewSignup = true  → creates active member (skip invitations page)
+// isNewSignup = false → creates pending member (must accept from invitations page)
 ```
 
 #### `revokeInvitation(invitationId)`
@@ -220,16 +237,67 @@ export function generateInviteUrl(token: string): string {
 
 Update the database role constraint and modify the InviteModal to include additional role options.
 
-### Email Notifications
+### Email Notifications (Not Yet Implemented)
 
-To send invitation emails, integrate an email service in the `createInvitation` function:
+**Current Status**: Email notifications are not configured. Users must manually share invitation links.
 
+**To implement**, integrate an email service in the invite creation flow:
+
+#### Option 1: Supabase Edge Functions + Email Service
+```typescript
+// Create Edge Function: supabase/functions/send-invite-email/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+
+serve(async (req) => {
+  const { email, inviteUrl, bandName } = await req.json()
+
+  // Use SendGrid, Resend, or other email service
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'invites@bandly.app',
+      to: email,
+      subject: `You've been invited to join ${bandName}`,
+      html: `
+        <h1>Band Invitation</h1>
+        <p>You've been invited to join ${bandName} on Bandly!</p>
+        <a href="${inviteUrl}">Accept Invitation</a>
+      `,
+    }),
+  })
+
+  return new Response(JSON.stringify({ success: true }), {
+    headers: { 'Content-Type': 'application/json' },
+  })
+})
+```
+
+Then call it from your app:
 ```typescript
 if (email) {
-  await sendInvitationEmail({
+  await supabase.functions.invoke('send-invite-email', {
+    body: { email, inviteUrl, bandName }
+  });
+}
+```
+
+#### Option 2: Direct Email Service Integration
+```typescript
+// In app code (requires API keys in .env)
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+if (email) {
+  await resend.emails.send({
+    from: 'invites@bandly.app',
     to: email,
-    inviteUrl: generateInviteUrl(token),
-    bandName: '...',
+    subject: `You've been invited to join ${bandName}`,
+    html: `<a href="${inviteUrl}">Accept Invitation</a>`,
   });
 }
 ```
@@ -283,11 +351,47 @@ if (email) {
 - Regenerate database types after schema changes
 - Restart TypeScript server in your IDE
 
+## Key Implementation Details
+
+### Why Two Different Status Flows?
+
+**New Signups (`isNewSignup: true`):**
+- Get `status: 'active'` immediately
+- Skip the Invitations page
+- Reasoning: They clicked the link specifically to join, already showed intent
+
+**Existing Users (`isNewSignup: false`):**
+- Get `status: 'pending'` first
+- Must accept from Invitations page
+- Reasoning: They may have clicked accidentally, gives them control
+
+### Database Flow
+
+```
+1. Invitation Created
+   └─> band_invitations (status: 'pending')
+
+2. User Clicks Link
+   ├─> New User → Sign Up
+   │   └─> band_members (status: 'active')
+   │   └─> band_invitations (current_uses++)
+   │
+   └─> Existing User → Click Accept
+       └─> band_members (status: 'pending')
+       └─> band_invitations (current_uses++)
+
+3. User Accepts from Invitations Page
+   └─> band_members.status = 'active'
+```
+
 ## Future Enhancements
 
-- Email invitations with notification system
-- QR code generation for in-person invites
-- Invite analytics (views, accepts, declines)
-- Batch invitations
-- Role-specific invite permissions
-- Custom invite messages
+- [ ] Email notification system (high priority)
+- [ ] SMS invitation support
+- [ ] QR code generation for in-person invites
+- [ ] Invite analytics (views, accepts, declines)
+- [ ] Batch invitation imports (CSV)
+- [ ] Role-specific invite permissions
+- [ ] Custom invitation messages
+- [ ] Invitation templates
+- [ ] Invite link preview cards (OpenGraph)

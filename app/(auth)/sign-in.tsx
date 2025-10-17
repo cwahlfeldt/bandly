@@ -28,12 +28,31 @@ export default function SignInScreen() {
       return;
     }
 
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
-    const { error, data } = await signIn(email, password);
+    const { data, error } = await signIn(email, password);
 
     if (error) {
       setLoading(false);
-      Alert.alert('Sign In Failed', error.message);
+
+      // Provide user-friendly error messages
+      let errorMessage = error.message;
+
+      if (error.message.includes('Invalid login credentials')) {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = 'Please verify your email address before signing in. Check your inbox for a verification link.';
+      } else if (error.message.includes('User not found')) {
+        errorMessage = 'No account found with this email address. Would you like to sign up instead?';
+      }
+
+      Alert.alert('Sign In Failed', errorMessage);
       return;
     }
 

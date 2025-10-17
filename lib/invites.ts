@@ -126,21 +126,40 @@ export async function validateInviteToken(
 }
 
 /**
- * Accept an invitation and add user to band
+ * Check if a user exists by email
  */
-export async function acceptInvitation(token: string, userId: string) {
-  console.log('[acceptInvitation] Starting with token:', token, 'userId:', userId);
+export async function checkUserExists(email: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', email.toLowerCase().trim())
+    .single();
 
+  if (error || !data) {
+    return null;
+  }
+
+  return data.id;
+}
+
+/**
+ * Accept an invitation and add user to band
+ * For existing users: creates pending band_member (they must accept from invitations page)
+ * For new signups: creates active band_member (auto-accept)
+ */
+export async function acceptInvitation(
+  token: string,
+  userId: string,
+  isNewSignup: boolean = false
+) {
   // Validate the invitation
   const validation = await validateInviteToken(token);
-  console.log('[acceptInvitation] Validation result:', validation);
 
   if (!validation.valid || !validation.invitation) {
     throw new Error(validation.error || 'Invalid invitation');
   }
 
   const invitation = validation.invitation;
-  console.log('[acceptInvitation] Invitation details:', invitation);
 
   // Check if user is already a member
   const { data: existingMember, error: memberCheckError } = await supabase
@@ -148,50 +167,94 @@ export async function acceptInvitation(token: string, userId: string) {
     .select('*')
     .eq('band_id', invitation.band_id)
     .eq('user_id', userId)
-    .single();
-
-  console.log('[acceptInvitation] Existing member check:', { existingMember, memberCheckError });
+    .maybeSingle();
 
   if (existingMember) {
     // If already a member, just return the band info
     if (existingMember.status === 'active') {
-      console.log('[acceptInvitation] User is already an active member');
       return {
         bandId: invitation.band_id,
         alreadyMember: true,
+        isPending: false,
+      };
+    }
+
+    // If pending, update to active
+    if (existingMember.status === 'pending') {
+      const { error: activateError } = await supabase
+        .from('band_members')
+        .update({ status: 'active' })
+        .eq('id', existingMember.id);
+
+      if (activateError) {
+        throw activateError;
+      }
+
+      // Update invitation usage
+      await supabase
+        .from('band_invitations')
+        .update({
+          current_uses: invitation.current_uses + 1,
+          status:
+            invitation.max_uses && invitation.current_uses + 1 >= invitation.max_uses
+              ? 'accepted'
+              : 'pending',
+        })
+        .eq('id', invitation.id);
+
+      return {
+        bandId: invitation.band_id,
+        alreadyMember: false,
+        isPending: false,
       };
     }
 
     // If inactive, reactivate them
-    console.log('[acceptInvitation] Reactivating inactive member');
     const { error: reactivateError } = await supabase
       .from('band_members')
       .update({ status: 'active', role: invitation.role })
       .eq('id', existingMember.id);
 
     if (reactivateError) {
-      console.error('[acceptInvitation] Error reactivating member:', reactivateError);
       throw reactivateError;
     }
   } else {
-    // Add user to band
-    console.log('[acceptInvitation] Adding new member to band');
+    // New member - create with appropriate status
+    // New signups get active status, existing users clicking link get pending status
+    const status = isNewSignup ? 'active' : 'pending';
+
     const { error: memberError } = await supabase.from('band_members').insert({
       band_id: invitation.band_id,
       user_id: userId,
       role: invitation.role,
-      status: 'active',
+      status: status,
     });
 
     if (memberError) {
-      console.error('[acceptInvitation] Error adding member:', memberError);
       throw memberError;
     }
+
+    // Update invitation usage
+    await supabase
+      .from('band_invitations')
+      .update({
+        current_uses: invitation.current_uses + 1,
+        status:
+          invitation.max_uses && invitation.current_uses + 1 >= invitation.max_uses
+            ? 'accepted'
+            : 'pending',
+      })
+      .eq('id', invitation.id);
+
+    return {
+      bandId: invitation.band_id,
+      alreadyMember: false,
+      isPending: status === 'pending',
+    };
   }
 
   // Update invitation usage
-  console.log('[acceptInvitation] Updating invitation usage');
-  const { error: updateError } = await supabase
+  await supabase
     .from('band_invitations')
     .update({
       current_uses: invitation.current_uses + 1,
@@ -202,14 +265,10 @@ export async function acceptInvitation(token: string, userId: string) {
     })
     .eq('id', invitation.id);
 
-  if (updateError) {
-    console.error('[acceptInvitation] Failed to update invitation usage:', updateError);
-  }
-
-  console.log('[acceptInvitation] Successfully accepted invitation');
   return {
     bandId: invitation.band_id,
     alreadyMember: false,
+    isPending: false,
   };
 }
 
