@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SelectedBandProvider } from '@/contexts/SelectedBandContext';
+import { InviteProvider } from '@/contexts/InviteContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -20,11 +21,13 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <SelectedBandProvider>
-        <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          <Stack screenOptions={{ headerShown: false }} />
-          <PortalHost />
-        </ThemeProvider>
+        <InviteProvider>
+          <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+            <Stack screenOptions={{ headerShown: false }} />
+            <PortalHost />
+          </ThemeProvider>
+        </InviteProvider>
       </SelectedBandProvider>
     </AuthProvider>
   );

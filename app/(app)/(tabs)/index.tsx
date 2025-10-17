@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, RefreshControl, Image } from 'react-native';
+import { View, ScrollView, RefreshControl, Image, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/EmptyState';
 import { Icon } from '@/components/ui/icon';
 import { Separator } from '@/components/ui/separator';
-import { MusicIcon, UsersIcon, CalendarIcon, ListIcon } from 'lucide-react-native';
+import { MusicIcon, UsersIcon, CalendarIcon, ListIcon, ChevronRight } from 'lucide-react-native';
 import { useSelectedBand } from '@/contexts/SelectedBandContext';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database.types';
@@ -102,28 +102,31 @@ export default function DashboardScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <View className="p-4 gap-4">
         {/* Band Header */}
-        <Card>
-          <CardContent className="p-4 gap-3">
-            <View className="flex-row items-center gap-3">
-              {selectedBand.photo_url ? (
-                <Image
-                  source={{ uri: selectedBand.photo_url }}
-                  className="w-16 h-16 rounded-lg"
-                />
-              ) : (
-                <View className="w-16 h-16 rounded-lg bg-muted items-center justify-center">
-                  <Text className="text-2xl">{selectedBand.name.charAt(0).toUpperCase()}</Text>
-                </View>
-              )}
-              <View className="flex-1">
-                <Text className="text-xl font-bold">{selectedBand.name}</Text>
-                {selectedBand.description && (
-                  <Text className="text-sm text-muted-foreground">{selectedBand.description}</Text>
+        <Pressable onPress={() => router.push(`/bands/${selectedBand.id}`)}>
+          <Card>
+            <CardContent className="p-4 gap-3">
+              <View className="flex-row items-center gap-3">
+                {selectedBand.photo_url ? (
+                  <Image
+                    source={{ uri: selectedBand.photo_url }}
+                    className="w-16 h-16 rounded-lg"
+                  />
+                ) : (
+                  <View className="w-16 h-16 rounded-lg bg-muted items-center justify-center">
+                    <Text className="text-2xl">{selectedBand.name.charAt(0).toUpperCase()}</Text>
+                  </View>
                 )}
+                <View className="flex-1">
+                  <Text className="text-xl font-bold">{selectedBand.name}</Text>
+                  {selectedBand.description && (
+                    <Text className="text-sm text-muted-foreground">{selectedBand.description}</Text>
+                  )}
+                </View>
+                <ChevronRight className="text-muted-foreground" size={24} />
               </View>
-            </View>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Pressable>
 
         {/* Quick Stats */}
         <View className="flex-row gap-3">

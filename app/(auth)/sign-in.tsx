@@ -1,16 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInvite } from '@/contexts/InviteContext';
 
 export default function SignInScreen() {
+  const { inviteToken } = useLocalSearchParams<{ inviteToken?: string }>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
+  const { setPendingInviteToken, acceptInvite } = useInvite();
+
+  useEffect(() => {
+    // Store pending invite token if provided
+    if (inviteToken) {
+      setPendingInviteToken(inviteToken);
+    }
+  }, [inviteToken]);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -19,12 +29,51 @@ export default function SignInScreen() {
     }
 
     setLoading(true);
-    const { error } = await signIn(email, password);
-    setLoading(false);
+    const { error, data } = await signIn(email, password);
 
     if (error) {
+      setLoading(false);
       Alert.alert('Sign In Failed', error.message);
+      return;
+    }
+
+    // If there's a pending invite token, accept it
+    if (inviteToken && data?.user) {
+      try {
+        const result = await acceptInvite(inviteToken, data.user.id);
+        setLoading(false);
+
+        Alert.alert(
+          'Welcome!',
+          result.alreadyMember
+            ? 'You have signed in successfully!'
+            : 'You have successfully joined the band!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                router.replace(`/bands/${result.bandId}`);
+              },
+            },
+          ]
+        );
+      } catch (inviteError) {
+        setLoading(false);
+        Alert.alert(
+          'Sign In Successful',
+          'However, there was an issue accepting the invitation. You can try joining the band again.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                router.replace('/(app)');
+              },
+            },
+          ]
+        );
+      }
     } else {
+      setLoading(false);
       router.replace('/(app)');
     }
   };
@@ -39,8 +88,18 @@ export default function SignInScreen() {
         <View className="gap-6">
           <View className="gap-2">
             <Text className="text-4xl font-bold">Welcome back</Text>
-            <Text className="text-lg text-muted-foreground">Sign in to your account</Text>
+            <Text className="text-lg text-muted-foreground">
+              {inviteToken ? 'Sign in to accept your band invitation' : 'Sign in to your account'}
+            </Text>
           </View>
+
+          {inviteToken && (
+            <View className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg">
+              <Text className="text-blue-700 dark:text-blue-300 text-sm">
+                You'll be added to the band after signing in.
+              </Text>
+            </View>
+          )}
 
           <View className="gap-4">
             <View className="gap-2">

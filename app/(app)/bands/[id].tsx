@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Image, ActivityIndicator, Pressable } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UsersIcon, CalendarIcon, MusicIcon, ListIcon, MessageSquareIcon } from 'lucide-react-native';
+import { UsersIcon, CalendarIcon, MusicIcon, ListIcon, MessageSquareIcon, UserPlus } from 'lucide-react-native';
 import { EmptyState } from '@/components/EmptyState';
+import { InviteModal } from '@/components/InviteModal';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Database } from '@/types/database.types';
@@ -24,6 +25,7 @@ export default function BandDetailScreen() {
   const [userRole, setUserRole] = useState<string>('member');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('members');
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -43,18 +45,33 @@ export default function BandDetailScreen() {
       if (bandError) throw bandError;
       setBand(bandData);
 
-      // Fetch band members with profiles
+      // Fetch band members
       const { data: membersData, error: membersError } = await supabase
         .from('band_members')
-        .select(`
-          *,
-          profiles:user_id (name, avatar_url)
-        `)
+        .select('*')
         .eq('band_id', id)
         .eq('status', 'active');
 
       if (membersError) throw membersError;
-      setMembers(membersData || []);
+
+      // Fetch profiles for each member separately
+      if (membersData && membersData.length > 0) {
+        const userIds = membersData.map(m => m.user_id);
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url')
+          .in('id', userIds);
+
+        // Combine members with their profiles
+        const membersWithProfiles = membersData.map(member => ({
+          ...member,
+          profiles: profilesData?.find(p => p.id === member.user_id) || null
+        }));
+
+        setMembers(membersWithProfiles);
+      } else {
+        setMembers([]);
+      }
 
       // Get user's role
       const userMember = membersData?.find((m) => m.user_id === user?.id);
@@ -90,6 +107,14 @@ export default function BandDetailScreen() {
         options={{
           title: band.name,
           headerShown: true,
+          headerRight: () => (
+            <Pressable
+              onPress={() => setInviteModalVisible(true)}
+              className="mr-4"
+            >
+              <UserPlus className="text-primary" size={24} />
+            </Pressable>
+          ),
         }}
       />
       <ScrollView className="flex-1 bg-background">
@@ -140,12 +165,10 @@ export default function BandDetailScreen() {
 
           <TabsContent value="members" className="p-4">
             <View className="gap-3">
-              {userRole === 'admin' && (
-                <Button onPress={() => router.push(`/(app)/bands/${id}/invite`)}>
-                  <Icon as={UsersIcon} size={20} />
-                  <Text>Invite Member</Text>
-                </Button>
-              )}
+              <Button onPress={() => setInviteModalVisible(true)}>
+                <Icon as={UserPlus} size={20} />
+                <Text>Invite Member</Text>
+              </Button>
               {members.map((member) => (
                 <View
                   key={member.id}
@@ -201,6 +224,13 @@ export default function BandDetailScreen() {
           </TabsContent>
         </Tabs>
       </ScrollView>
+
+      <InviteModal
+        visible={inviteModalVisible}
+        onClose={() => setInviteModalVisible(false)}
+        bandId={id}
+        bandName={band.name}
+      />
     </>
   );
 }

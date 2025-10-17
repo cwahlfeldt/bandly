@@ -1,18 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInvite } from '@/contexts/InviteContext';
 
 export default function SignUpScreen() {
+  const { inviteToken } = useLocalSearchParams<{ inviteToken?: string }>();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
+  const { setPendingInviteToken, acceptInvite } = useInvite();
+
+  useEffect(() => {
+    // Store pending invite token if provided
+    if (inviteToken) {
+      setPendingInviteToken(inviteToken);
+    }
+  }, [inviteToken]);
 
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword) {
@@ -32,31 +42,78 @@ export default function SignUpScreen() {
 
     setLoading(true);
     const { data, error } = await signUp(email, password, name);
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       Alert.alert('Sign Up Failed', error.message);
-    } else {
-      // Check if email confirmation is required
-      if (data?.user && !data.session) {
-        // Email confirmation required
-        Alert.alert(
-          'Check your email',
-          'Please check your email to verify your account before signing in.',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/(auth)/sign-in'),
+      return;
+    }
+
+    // Check if email confirmation is required
+    if (data?.user && !data.session) {
+      setLoading(false);
+      // Email confirmation required
+      Alert.alert(
+        'Check your email',
+        inviteToken
+          ? 'Please check your email to verify your account. After verification, sign in to accept your band invitation.'
+          : 'Please check your email to verify your account before signing in.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              const params = inviteToken ? { inviteToken } : {};
+              router.replace({ pathname: '/(auth)/sign-in', params });
             },
-          ]
-        );
-      } else if (data?.session) {
-        // User is automatically signed in (email confirmation disabled)
-        router.replace('/(app)');
+          },
+        ]
+      );
+    } else if (data?.session && data?.user) {
+      // User is automatically signed in (email confirmation disabled)
+      // If there's a pending invite token, accept it
+      if (inviteToken) {
+        try {
+          const result = await acceptInvite(inviteToken, data.user.id);
+          setLoading(false);
+
+          Alert.alert(
+            'Welcome to Bandly!',
+            result.alreadyMember
+              ? 'Your account has been created!'
+              : 'Your account has been created and you have successfully joined the band!',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  router.replace(`/bands/${result.bandId}`);
+                },
+              },
+            ]
+          );
+        } catch (inviteError) {
+          setLoading(false);
+          Alert.alert(
+            'Account Created',
+            'Your account has been created, but there was an issue accepting the invitation. You can try joining the band again.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  router.replace('/(app)');
+                },
+              },
+            ]
+          );
+        }
       } else {
-        // Fallback - go to sign in
-        router.replace('/(auth)/sign-in');
+        setLoading(false);
+        router.replace('/(app)');
       }
+    } else {
+      setLoading(false);
+      // Fallback - go to sign in
+      const params = inviteToken ? { inviteToken } : {};
+      router.replace({ pathname: '/(auth)/sign-in', params });
     }
   };
 
@@ -70,8 +127,18 @@ export default function SignUpScreen() {
         <View className="gap-6">
           <View className="gap-2">
             <Text className="text-4xl font-bold">Create account</Text>
-            <Text className="text-lg text-muted-foreground">Sign up to get started</Text>
+            <Text className="text-lg text-muted-foreground">
+              {inviteToken ? 'Sign up to join your band' : 'Sign up to get started'}
+            </Text>
           </View>
+
+          {inviteToken && (
+            <View className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg">
+              <Text className="text-blue-700 dark:text-blue-300 text-sm">
+                You'll be added to the band after creating your account.
+              </Text>
+            </View>
+          )}
 
           <View className="gap-4">
             <View className="gap-2">
@@ -130,7 +197,14 @@ export default function SignUpScreen() {
 
           <View className="flex-row items-center justify-center gap-1">
             <Text className="text-muted-foreground">Already have an account?</Text>
-            <Link href="/(auth)/sign-in" asChild>
+            <Link
+              href={
+                inviteToken
+                  ? { pathname: '/(auth)/sign-in', params: { inviteToken } }
+                  : '/(auth)/sign-in'
+              }
+              asChild
+            >
               <Button variant="link" size="sm" disabled={loading}>
                 <Text>Sign In</Text>
               </Button>
