@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInvite } from '@/contexts/InviteContext';
 import { navigate } from 'expo-router/build/global-state/routing';
+import { showAlert } from '@/lib/alert';
 
 export default function SignInScreen() {
   const { inviteToken } = useLocalSearchParams<{ inviteToken?: string }>();
@@ -25,78 +26,98 @@ export default function SignInScreen() {
 
   const handleSignIn = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlert('Error', 'Please fill in all fields');
       return;
     }
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      showAlert('Invalid Email', 'Please enter a valid email address');
       return;
     }
 
     setLoading(true);
-    const { data, error } = await signIn(email, password);
 
-    if (error) {
-      setLoading(false);
+    try {
+      console.log('[SignIn] Starting sign in process');
+      const { data, error } = await signIn(email.trim(), password);
 
-      // Provide user-friendly error messages
-      let errorMessage = error.message;
+      if (error) {
+        console.error('[SignIn] Sign in failed:', error.message);
 
-      if (error.message.includes('Invalid login credentials')) {
-        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-      } else if (error.message.includes('Email not confirmed')) {
-        errorMessage =
-          'Please verify your email address before signing in. Check your inbox for a verification link.';
-      } else if (error.message.includes('User not found')) {
-        errorMessage =
-          'No account found with this email address. Would you like to sign up instead?';
+        // Provide user-friendly error messages
+        let errorMessage = error.message;
+
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage =
+            'Please verify your email address before signing in. Check your inbox for a verification link.';
+        } else if (error.message.includes('User not found')) {
+          errorMessage =
+            'No account found with this email address. Would you like to sign up instead?';
+        } else if (error.message.includes('Network')) {
+          errorMessage =
+            'Network error. Please check your internet connection and try again.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage =
+            'Request timed out. Please check your internet connection and try again.';
+        }
+
+        showAlert('Sign In Failed', errorMessage);
+        return;
       }
 
-      Alert.alert('Sign In Failed', errorMessage);
-      return;
-    }
+      console.log('[SignIn] Sign in successful');
 
-    // If there's a pending invite token, accept it
-    if (inviteToken && data?.user) {
-      try {
-        const result = await acceptInvite(inviteToken, data.user.id);
-        setLoading(false);
+      // If there's a pending invite token, accept it
+      if (inviteToken && data?.user) {
+        try {
+          console.log('[SignIn] Accepting pending invite');
+          const result = await acceptInvite(inviteToken, data.user.id);
 
-        Alert.alert(
-          'Welcome!',
-          result.alreadyMember
-            ? 'You have signed in successfully!'
-            : 'You have successfully joined the band!',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                router.replace(`/bands/${result.bandId}`);
+          showAlert(
+            'Welcome!',
+            result.alreadyMember
+              ? 'You have signed in successfully!'
+              : 'You have successfully joined the band!',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  router.replace(`/bands/${result.bandId}`);
+                },
               },
-            },
-          ]
-        );
-      } catch (inviteError) {
-        setLoading(false);
-        Alert.alert(
-          'Sign In Successful',
-          'However, there was an issue accepting the invitation. You can try joining the band again.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                router.replace('/(app)');
+            ]
+          );
+        } catch (inviteError) {
+          console.error('[SignIn] Invite acceptance failed:', inviteError);
+          showAlert(
+            'Sign In Successful',
+            'However, there was an issue accepting the invitation. You can try joining the band again.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  router.replace('/(app)');
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        }
+      } else {
+        console.log('[SignIn] Navigating to app');
+        router.replace('/(app)');
       }
-    } else {
+    } catch (error) {
+      console.error('[SignIn] Unexpected error during sign in:', error);
+      showAlert(
+        'Sign In Failed',
+        'An unexpected error occurred. Please try again. If the problem persists, please contact support.'
+      );
+    } finally {
       setLoading(false);
-      router.replace('/(app)');
     }
   };
 

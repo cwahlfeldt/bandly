@@ -24,7 +24,7 @@ export default function RootLayout() {
         <InviteProvider>
           <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-            <Stack screenOptions={{ headerShown: false }} />
+            <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
             <PortalHost />
           </ThemeProvider>
         </InviteProvider>

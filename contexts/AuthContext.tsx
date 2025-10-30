@@ -45,27 +45,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, name: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
+    try {
+      console.log('[AuthContext] Attempting sign up for:', email);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+          },
+          emailRedirectTo: undefined,
         },
-        emailRedirectTo: undefined,
-      },
-    });
+      });
 
-    return { data, error };
+      if (error) {
+        console.error('[AuthContext] Sign up error:', error.message);
+        return { data: null, error };
+      }
+
+      console.log('[AuthContext] Sign up successful');
+      return { data, error: null };
+    } catch (error) {
+      console.error('[AuthContext] Sign up exception:', error);
+      return {
+        data: null,
+        error: {
+          message: error instanceof Error ? error.message : 'An unexpected error occurred during sign up',
+          name: 'SignUpException',
+          status: 500,
+        } as AuthError,
+      };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      console.log('[AuthContext] Attempting sign in for:', email);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    return { data, error };
+      if (error) {
+        console.error('[AuthContext] Sign in error:', error.message);
+        return { data: null, error };
+      }
+
+      console.log('[AuthContext] Sign in successful');
+      return { data, error: null };
+    } catch (error) {
+      console.error('[AuthContext] Sign in exception:', error);
+      return {
+        data: null,
+        error: {
+          message: error instanceof Error ? error.message : 'An unexpected error occurred during sign in',
+          name: 'SignInException',
+          status: 500,
+        } as AuthError,
+      };
+    }
   };
 
   const signOut = async () => {

@@ -100,26 +100,28 @@ export default function DashboardScreen() {
     <ScrollView
       className="flex-1 bg-background"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <View className="p-4 gap-4">
+      <View className="gap-4 p-4">
         {/* Band Header */}
         <Pressable onPress={() => router.push(`/bands/${selectedBand.id}`)}>
           <Card>
-            <CardContent className="p-4 gap-3">
+            <CardContent className="gap-3 p-4">
               <View className="flex-row items-center gap-3">
                 {selectedBand.photo_url ? (
                   <Image
                     source={{ uri: selectedBand.photo_url }}
-                    className="w-16 h-16 rounded-lg"
+                    className="h-16 w-16 rounded-lg"
                   />
                 ) : (
-                  <View className="w-16 h-16 rounded-lg bg-muted items-center justify-center">
+                  <View className="h-16 w-16 items-center justify-center rounded-lg bg-muted">
                     <Text className="text-2xl">{selectedBand.name.charAt(0).toUpperCase()}</Text>
                   </View>
                 )}
                 <View className="flex-1">
                   <Text className="text-xl font-bold">{selectedBand.name}</Text>
                   {selectedBand.description && (
-                    <Text className="text-sm text-muted-foreground">{selectedBand.description}</Text>
+                    <Text className="text-sm text-muted-foreground">
+                      {selectedBand.description}
+                    </Text>
                   )}
                 </View>
                 <ChevronRight className="text-muted-foreground" size={24} />
@@ -131,22 +133,22 @@ export default function DashboardScreen() {
         {/* Quick Stats */}
         <View className="flex-row gap-3">
           <Card className="flex-1">
-            <CardContent className="p-3 items-center">
-              <Icon as={UsersIcon} size={24} className="text-primary mb-1" />
+            <CardContent className="items-center p-3">
+              <Icon as={UsersIcon} size={24} className="mb-1 text-primary" />
               <Text className="text-2xl font-bold">{members.length}</Text>
               <Text className="text-xs text-muted-foreground">Members</Text>
             </CardContent>
           </Card>
           <Card className="flex-1">
-            <CardContent className="p-3 items-center">
-              <Icon as={CalendarIcon} size={24} className="text-primary mb-1" />
+            <CardContent className="items-center p-3">
+              <Icon as={CalendarIcon} size={24} className="mb-1 text-primary" />
               <Text className="text-2xl font-bold">{upcomingEvents.length}</Text>
               <Text className="text-xs text-muted-foreground">Upcoming</Text>
             </CardContent>
           </Card>
           <Card className="flex-1">
-            <CardContent className="p-3 items-center">
-              <Icon as={MusicIcon} size={24} className="text-primary mb-1" />
+            <CardContent className="items-center p-3">
+              <Icon as={MusicIcon} size={24} className="mb-1 text-primary" />
               <Text className="text-2xl font-bold">{recentTracks.length}</Text>
               <Text className="text-xs text-muted-foreground">Tracks</Text>
             </CardContent>
@@ -155,11 +157,11 @@ export default function DashboardScreen() {
 
         {/* Upcoming Events */}
         <Card>
-          <CardContent className="p-4 gap-3">
+          <CardContent className="gap-3 p-4">
             <Text className="text-lg font-semibold">Upcoming Events</Text>
             <Separator />
             {upcomingEvents.length === 0 ? (
-              <Text className="text-sm text-muted-foreground text-center py-4">
+              <Text className="py-4 text-center text-sm text-muted-foreground">
                 No upcoming events
               </Text>
             ) : (
@@ -175,11 +177,11 @@ export default function DashboardScreen() {
 
         {/* Recent Tracks */}
         <Card>
-          <CardContent className="p-4 gap-3">
+          <CardContent className="gap-3 p-4">
             <Text className="text-lg font-semibold">Recent Tracks</Text>
             <Separator />
             {recentTracks.length === 0 ? (
-              <Text className="text-sm text-muted-foreground text-center py-4">
+              <Text className="py-4 text-center text-sm text-muted-foreground">
                 No audio tracks yet
               </Text>
             ) : (

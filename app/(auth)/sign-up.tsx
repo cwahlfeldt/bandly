@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInvite } from '@/contexts/InviteContext';
+import { showAlert } from '@/lib/alert';
 
 export default function SignUpScreen() {
   const { inviteToken } = useLocalSearchParams<{ inviteToken?: string }>();
@@ -26,112 +27,133 @@ export default function SignUpScreen() {
 
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlert('Error', 'Please fill in all fields');
       return;
     }
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      showAlert('Invalid Email', 'Please enter a valid email address');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showAlert('Error', 'Passwords do not match');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showAlert('Error', 'Password must be at least 6 characters');
       return;
     }
 
     setLoading(true);
-    const { data, error } = await signUp(email, password, name);
 
-    if (error) {
-      setLoading(false);
+    try {
+      console.log('[SignUp] Starting sign up process');
+      const { data, error } = await signUp(email.trim(), password, name.trim());
 
-      // Provide user-friendly error messages
-      let errorMessage = error.message;
+      if (error) {
+        console.error('[SignUp] Sign up failed:', error.message);
 
-      if (error.message.includes('User already registered')) {
-        errorMessage = 'An account with this email already exists. Please sign in instead.';
-      } else if (error.message.includes('Password should be at least')) {
-        errorMessage = 'Password must be at least 6 characters long.';
-      } else if (error.message.includes('Invalid email')) {
-        errorMessage = 'Please enter a valid email address.';
-      } else if (error.message.includes('Email rate limit exceeded')) {
-        errorMessage = 'Too many signup attempts. Please try again in a few minutes.';
+        // Provide user-friendly error messages
+        let errorMessage = error.message;
+
+        if (error.message.includes('User already registered')) {
+          errorMessage = 'An account with this email already exists. Please sign in instead.';
+        } else if (error.message.includes('Password should be at least')) {
+          errorMessage = 'Password must be at least 6 characters long.';
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = 'Please enter a valid email address.';
+        } else if (error.message.includes('Email rate limit exceeded')) {
+          errorMessage = 'Too many signup attempts. Please try again in a few minutes.';
+        } else if (error.message.includes('Network')) {
+          errorMessage =
+            'Network error. Please check your internet connection and try again.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage =
+            'Request timed out. Please check your internet connection and try again.';
+        }
+
+        showAlert('Sign Up Failed', errorMessage);
+        return;
       }
 
-      Alert.alert('Sign Up Failed', errorMessage);
-      return;
-    }
+      console.log('[SignUp] Sign up successful, processing result');
 
-    // Check if email confirmation is required
-    if (data?.user && !data.session) {
-      setLoading(false);
-      // Email confirmation required
-      Alert.alert(
-        'Check your email',
-        inviteToken
-          ? 'Please check your email to verify your account. After verification, sign in to accept your band invitation.'
-          : 'Please check your email to verify your account before signing in.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              const params = inviteToken ? { inviteToken } : {};
-              router.replace({ pathname: '/(auth)/sign-in', params });
-            },
-          },
-        ]
-      );
-    } else if (data?.session && data?.user) {
-      // User is automatically signed in (email confirmation disabled)
-      // If there's a pending invite token, accept it
-      if (inviteToken) {
-        try {
-          // Pass isNewSignup=true so they get active status immediately
-          const result = await acceptInvite(inviteToken, data.user.id, true);
-
-          // Navigate to band page after successful signup and invite acceptance
-          setTimeout(() => {
-            setLoading(false);
-            router.replace(`/bands/${result.bandId}`);
-          }, 500);
-        } catch (inviteError) {
-          setLoading(false);
-
-          // Even if invite fails, user is logged in, so navigate to app
-          Alert.alert(
-            'Account Created',
-            'Your account has been created, but there was an issue accepting the invitation. You can try joining the band from the invite link again.',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  router.replace('/');
-                },
+      // Check if email confirmation is required
+      if (data?.user && !data.session) {
+        console.log('[SignUp] Email confirmation required');
+        // Email confirmation required
+        showAlert(
+          'Check your email',
+          inviteToken
+            ? 'Please check your email to verify your account. After verification, sign in to accept your band invitation.'
+            : 'Please check your email to verify your account before signing in.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                const params = inviteToken ? { inviteToken } : {};
+                router.replace({ pathname: '/(auth)/sign-in', params });
               },
-            ]
-          );
+            },
+          ]
+        );
+      } else if (data?.session && data?.user) {
+        console.log('[SignUp] User automatically signed in');
+        // User is automatically signed in (email confirmation disabled)
+        // If there's a pending invite token, accept it
+        if (inviteToken) {
+          try {
+            console.log('[SignUp] Accepting pending invite');
+            // Pass isNewSignup=true so they get active status immediately
+            const result = await acceptInvite(inviteToken, data.user.id, true);
+
+            // Navigate to band page after successful signup and invite acceptance
+            setTimeout(() => {
+              router.replace(`/bands/${result.bandId}`);
+            }, 500);
+          } catch (inviteError) {
+            console.error('[SignUp] Invite acceptance failed:', inviteError);
+
+            // Even if invite fails, user is logged in, so navigate to app
+            showAlert(
+              'Account Created',
+              'Your account has been created, but there was an issue accepting the invitation. You can try joining the band from the invite link again.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    router.replace('/');
+                  },
+                },
+              ]
+            );
+          }
+        } else {
+          console.log('[SignUp] Navigating to app');
+          // No invite token - just navigate to app
+          // Give AuthContext a moment to process the session
+          setTimeout(() => {
+            router.replace('/');
+          }, 300);
         }
       } else {
-        // No invite token - just navigate to app
-        setLoading(false);
-        // Give AuthContext a moment to process the session
-        setTimeout(() => {
-          router.replace('/');
-        }, 300);
+        console.log('[SignUp] Unexpected state, redirecting to sign in');
+        // Fallback - go to sign in
+        const params = inviteToken ? { inviteToken } : {};
+        router.replace({ pathname: '/(auth)/sign-in', params });
       }
-    } else {
+    } catch (error) {
+      console.error('[SignUp] Unexpected error during sign up:', error);
+      showAlert(
+        'Sign Up Failed',
+        'An unexpected error occurred. Please try again. If the problem persists, please contact support.'
+      );
+    } finally {
       setLoading(false);
-      // Fallback - go to sign in
-      const params = inviteToken ? { inviteToken } : {};
-      router.replace({ pathname: '/(auth)/sign-in', params });
     }
   };
 
