@@ -5,9 +5,11 @@ import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UsersIcon, CalendarIcon, MusicIcon, ListIcon, MessageSquareIcon, UserPlus, UserMinus } from 'lucide-react-native';
+import { UsersIcon, CalendarIcon, MusicIcon, ListIcon, MessageSquareIcon, UserPlus, UserMinus, PlusIcon } from 'lucide-react-native';
 import { EmptyState } from '@/components/EmptyState';
 import { InviteModal } from '@/components/InviteModal';
+import { EventCard } from '@/components/EventCard';
+import { CreateEventModal } from '@/components/CreateEventModal';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Database } from '@/types/database.types';
@@ -16,16 +18,19 @@ type Band = Database['public']['Tables']['bands']['Row'];
 type BandMember = Database['public']['Tables']['band_members']['Row'] & {
   profiles?: { name: string | null; avatar_url: string | null } | null;
 };
+type Event = Database['public']['Tables']['events']['Row'];
 
 export default function BandDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const [band, setBand] = useState<Band | null>(null);
   const [members, setMembers] = useState<BandMember[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [userRole, setUserRole] = useState<string>('member');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('members');
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [createEventModalVisible, setCreateEventModalVisible] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -77,6 +82,19 @@ export default function BandDetailScreen() {
       const userMember = membersData?.find((m) => m.user_id === user?.id);
       if (userMember) {
         setUserRole(userMember.role);
+      }
+
+      // Fetch band events
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('band_id', id)
+        .order('event_date', { ascending: true });
+
+      if (eventsError) {
+        console.error('Error fetching events:', eventsError);
+      } else {
+        setEvents(eventsData || []);
       }
     } catch (error) {
       console.error('Error fetching band details:', error);
@@ -243,11 +261,36 @@ export default function BandDetailScreen() {
           </TabsContent>
 
           <TabsContent value="events">
-            <EmptyState
-              icon={CalendarIcon}
-              title="No Events"
-              description="Events will appear here once created."
-            />
+            <View className="gap-3">
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-sm text-muted-foreground">
+                  {events.length} {events.length === 1 ? 'event' : 'events'}
+                </Text>
+                <Button
+                  size="sm"
+                  onPress={() => setCreateEventModalVisible(true)}
+                  className="flex-row gap-2">
+                  <PlusIcon size={14} color="white" />
+                  <Text className="text-primary-foreground text-sm">New Event</Text>
+                </Button>
+              </View>
+
+              {events.length > 0 ? (
+                events.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onPress={() => router.push(`/(app)/events/${event.id}`)}
+                  />
+                ))
+              ) : (
+                <EmptyState
+                  icon={CalendarIcon}
+                  title="No Events"
+                  description="Create your first event to get started."
+                />
+              )}
+            </View>
           </TabsContent>
 
           <TabsContent value="audio">
@@ -281,6 +324,13 @@ export default function BandDetailScreen() {
         onClose={() => setInviteModalVisible(false)}
         bandId={id}
         bandName={band.name}
+      />
+
+      <CreateEventModal
+        isVisible={createEventModalVisible}
+        onClose={() => setCreateEventModalVisible(false)}
+        onEventCreated={fetchBandDetails}
+        bandId={id}
       />
     </>
   );
